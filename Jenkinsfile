@@ -5,7 +5,7 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '15', artifactNumToKeepStr: '10'))
   }
   environment {
-    IMAGE_NAME = "tauruschinatown/eb-express" 
+    IMAGE_NAME = "22471264/eb-express" 
     IMAGE_TAG  = "${env.BRANCH_NAME ?: "main"}-${env.BUILD_NUMBER}"
   }
   stages {
