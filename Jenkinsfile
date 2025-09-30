@@ -5,10 +5,11 @@ pipeline {
     DOCKER_TLS_VERIFY = '1'
     DOCKER_CERT_PATH  = '/certs/client'
     DOCKER_HOST       = 'tcp://docker:2376'
-    DOCKER_USER       = '22471264'
-    IMAGE_NAME        = 'eb-express'
-    IMAGE_TAG         = "main-${env.BUILD_NUMBER}"
-    DOCKER_REPO       = "${env.DOCKER_USER}/${env.IMAGE_NAME}"
+
+    DOCKER_USER = '22471264'
+    IMAGE_NAME  = 'eb-express'
+    IMAGE_TAG   = "main-${env.BUILD_NUMBER}"
+    DOCKER_REPO = "${env.DOCKER_USER}/${env.IMAGE_NAME}"
   }
 
   stages {
@@ -35,31 +36,34 @@ pipeline {
     }
 
     stage('Dependency Scan (Snyk fail on HIGH)') {
-     agent {
-      docker {
-        image 'node:16-alpine'
-        args '-v $HOME/.npm:/root/.npm'
+      agent {
+        docker {
+          image 'node:16-alpine'
+          args "-u 1000:1000 -v ${env.WORKSPACE}:${env.WORKSPACE} -w ${env.WORKSPACE} -v ${env.HOME}/.npm:/root/.npm"
+        }
       }
-    }
-    steps {
-      withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
-        sh '''
-          set -eux
-          npm ci --prefer-offline --no-audit
-          npm install -g snyk
-          snyk auth "$SNYK_TOKEN"
-          mkdir -p reports
-          snyk test --severity-threshold=high --json-file-output=reports/snyk-report.json
-        '''
-      }
-    }
-    post {
-      always {
-        archiveArtifacts artifacts: 'reports/snyk-report.json', allowEmptyArchive: true
-      }
-    }
-  }
+      steps {
+        withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+          sh '''
+            set -eux
+            # install deps so Snyk understands the tree
+            npm ci --prefer-offline --no-audit
 
+            # ensure reports dir exists
+            mkdir -p reports
+
+            # use npx so no global install/root is required
+            npx -y snyk auth "$SNYK_TOKEN"
+            npx -y snyk test --severity-threshold=high --json-file-output=reports/snyk-report.json
+          '''
+        }
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'reports/snyk-report.json', allowEmptyArchive: true
+        }
+      }
+    }
 
     stage('Build Docker Image') {
       steps {
