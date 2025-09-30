@@ -1,11 +1,18 @@
 pipeline {
   agent { label 'built-in' }
 
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '15', artifactNumToKeepStr: '10'))
+  }
+
   environment {
+    // docker (keep these as they worked for your setup)
     DOCKER_TLS_VERIFY = '1'
     DOCKER_CERT_PATH  = '/certs/client'
     DOCKER_HOST       = 'tcp://docker:2376'
 
+    // docker hub info
     DOCKER_USER = '22471264'
     IMAGE_NAME  = 'eb-express'
     IMAGE_TAG   = "main-${env.BUILD_NUMBER}"
@@ -21,6 +28,7 @@ pipeline {
       agent {
         docker {
           image 'node:16-alpine'
+          // run as non-root and mount workspace/npm cache
           args "-u 1000:1000 -v ${env.WORKSPACE}:${env.WORKSPACE} -w ${env.WORKSPACE} -v ${env.HOME}/.npm:/root/.npm"
         }
       }
@@ -49,12 +57,18 @@ pipeline {
             # install deps so Snyk understands the tree
             npm ci --prefer-offline --no-audit
 
-            # ensure reports dir exists
             mkdir -p reports
 
-            # use npx so no global install/root is required
-            npx -y snyk auth "$SNYK_TOKEN"
-            npx -y snyk test --severity-threshold=high --json-file-output=reports/snyk-report.json
+            # --- non-interactive auth (no browser) ---
+            set +x
+            export SNYK_TOKEN="$SNYK_TOKEN"
+            npx -y snyk config set api="$SNYK_TOKEN"
+            set -x
+
+            # fail build if >= HIGH vulns
+            SNYK_DISABLE_ANALYTICS=1 npx -y snyk test \
+              --severity-threshold=high \
+              --json-file-output=reports/snyk-report.json
           '''
         }
       }
