@@ -1,5 +1,5 @@
 pipeline {
-  agent none
+  agent { label 'built-in' }
   environment {
     IMAGE_REPO = "eb-express"
     IMAGE_TAG  = "main-${env.BUILD_NUMBER}"
@@ -56,5 +56,11 @@ pipeline {
       archiveArtifacts artifacts: 'npm-debug.log,**/reports/**,**/*.xml', allowEmptyArchive: true
       junit testResults: '**/junit-*.xml', allowEmptyResults: true
     }
+  }
+}
+post {
+  always {
+    archiveArtifacts artifacts: 'npm-debug.log,**/reports/**,**/*.xml', allowEmptyArchive: true
+    junit testResults: '**/junit-*.xml', allowEmptyResults: true
   }
 }
